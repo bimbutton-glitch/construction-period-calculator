@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>공사기간 계산기</title>
+<meta name="description" content="착공일과 준공일로 총 공기, 작업가능일, D-day, 진행률을 계산합니다.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏗️</text></svg>">
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #ffffff; --text: #1d2330; --muted: #6b7385;
+    --line: #e2e5eb; --accent: #e8730c; --accent-soft: #fdeedf; --good: #1f8a5b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #14171d; --card: #1d2129; --text: #e7e9ee; --muted: #9aa1b0;
+      --line: #2d323c; --accent: #f28b2e; --accent-soft: #3a2a1b; --good: #4cc38a; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font-family: "Pretendard", "Malgun Gothic", system-ui, sans-serif; line-height: 1.5; }
+  main { max-width: 760px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin-bottom: 16px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  label { display: block; font-size: .85rem; color: var(--muted); margin-bottom: 4px; }
+  input[type=date], input[type=text] { width: 100%; padding: 10px 12px; font-size: 1rem; border: 1px solid var(--line);
+    border-radius: 8px; background: var(--bg); color: var(--text); font-family: inherit; }
+  .checks { display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 14px; }
+  .checks label { display: flex; align-items: center; gap: 6px; color: var(--text); font-size: .95rem; margin: 0; cursor: pointer; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .stat { background: var(--bg); border-radius: 10px; padding: 14px; }
+  .stat .k { font-size: .8rem; color: var(--muted); }
+  .stat .v { font-size: 1.5rem; font-weight: 700; }
+  .stat .v small { font-size: .85rem; font-weight: 400; color: var(--muted); }
+  .stat.hl { background: var(--accent-soft); }
+  .stat.hl .v { color: var(--accent); }
+  .bar { height: 12px; background: var(--bg); border-radius: 99px; overflow: hidden; margin: 16px 0 6px; }
+  .bar > div { height: 100%; background: var(--accent); width: 0; transition: width .3s; }
+  .barlabel { display: flex; justify-content: space-between; font-size: .85rem; color: var(--muted); }
+  h2 { font-size: 1rem; margin: 0 0 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+  td { padding: 6px 4px; border-bottom: 1px solid var(--line); }
+  td:first-child { color: var(--muted); width: 9em; font-variant-numeric: tabular-nums; }
+  .btn { padding: 10px 14px; border: 1px solid var(--accent); background: var(--accent); color: #fff;
+    border-radius: 8px; font-size: .95rem; cursor: pointer; font-family: inherit; }
+  .btn.ghost { background: transparent; color: var(--accent); }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  .err { color: #d9443a; font-size: .9rem; margin-top: 10px; display: none; }
+  .note { font-size: .8rem; color: var(--muted); }
+  footer { text-align: center; font-size: .8rem; color: var(--muted); margin-top: 24px; }
+  @media (max-width: 560px) { .row, .stats { grid-template-columns: 1fr 1fr; } .stats .stat:first-child { grid-column: 1 / -1; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>🏗️ 공사기간 계산기</h1>
+  <p class="sub">착공일과 준공일을 넣으면 총 공기, 작업가능일, D-day, 진행률을 계산해요.</p>
+
+  <section class="card">
+    <div class="row">
+      <div><label for="start">착공일</label><input type="date" id="start"></div>
+      <div><label for="end">준공일</label><input type="date" id="end"></div>
+    </div>
+    <div style="margin-top:12px"><label for="name">공사명 (선택)</label><input type="text" id="name" placeholder="예: OO 신축공사"></div>
+    <div class="checks">
+      <label><input type="checkbox" id="exSat" checked> 토요일 제외</label>
+      <label><input type="checkbox" id="exSun" checked> 일요일 제외</label>
+      <label><input type="checkbox" id="exHol" checked> 공휴일 제외</label>
+    </div>
+    <div class="actions">
+      <button class="btn" id="share">🔗 결과 링크 복사</button>
+      <button class="btn ghost" id="reset">초기화</button>
+    </div>
+    <div class="err" id="err">준공일은 착공일 이후여야 해요.</div>
+  </section>
+
+  <section class="card" id="result">
+    <h2 id="title">계산 결과</h2>
+    <div class="stats">
+      <div class="stat hl"><div class="k">D-day (준공까지)</div><div class="v" id="dday">-</div></div>
+      <div class="stat"><div class="k">총 공사기간</div><div class="v" id="total">-</div></div>
+      <div class="stat"><div class="k">작업가능일</div><div class="v" id="work">-</div></div>
+      <div class="stat"><div class="k">제외일 (휴일)</div><div class="v" id="off">-</div></div>
+      <div class="stat"><div class="k">경과일</div><div class="v" id="elapsed">-</div></div>
+      <div class="stat"><div class="k">남은 작업가능일</div><div class="v" id="remainWork">-</div></div>
+    </div>
+    <div class="bar"><div id="barfill"></div></div>
+    <div class="barlabel"><span>시간 경과율</span><span id="pct">-</span></div>
+    <p class="note">총 공사기간은 착공일과 준공일을 모두 포함한 역일(달력 일수) 기준이에요.</p>
+  </section>
+
+  <section class="card">
+    <h2>기간 내 공휴일 <span class="note" id="holCount"></span></h2>
+    <table><tbody id="holList"></tbody></table>
+    <p class="note">공휴일 데이터: 2025–2028년 (대체공휴일·선거일 포함). 그 밖의 연도는 양력 고정 공휴일만 반영돼요.</p>
+  </section>
+
+  <footer>Made with Claude Code · GitHub Pages</footer>
+</main>
+
+<script>
+// 대한민국 공휴일 (음력·대체·임시 공휴일 포함)
+const HOLIDAYS = {
+  // 2025
+  "2025-01-01":"신정","2025-01-27":"임시공휴일","2025-01-28":"설날 연휴","2025-01-29":"설날","2025-01-30":"설날 연휴",
+  "2025-03-01":"삼일절","2025-03-03":"대체공휴일(삼일절)","2025-05-05":"어린이날·부처님오신날","2025-05-06":"대체공휴일",
+  "2025-06-03":"대통령 선거일","2025-06-06":"현충일","2025-08-15":"광복절","2025-10-03":"개천절",
+  "2025-10-05":"추석 연휴","2025-10-06":"추석","2025-10-07":"추석 연휴","2025-10-08":"대체공휴일(추석)",
+  "2025-10-09":"한글날","2025-12-25":"성탄절",
+  // 2026
+  "2026-01-01":"신정","2026-02-16":"설날 연휴","2026-02-17":"설날","2026-02-18":"설날 연휴",
+  "2026-03-01":"삼일절","2026-03-02":"대체공휴일(삼일절)","2026-05-05":"어린이날",
+  "2026-05-24":"부처님오신날","2026-05-25":"대체공휴일(부처님오신날)","2026-06-03":"지방선거일","2026-06-06":"현충일",
+  "2026-08-15":"광복절","2026-08-17":"대체공휴일(광복절)","2026-09-24":"추석 연휴","2026-09-25":"추석","2026-09-26":"추석 연휴",
+  "2026-09-28":"대체공휴일(추석)","2026-10-03":"개천절","2026-10-05":"대체공휴일(개천절)","2026-10-09":"한글날","2026-12-25":"성탄절",
+  // 2027
+  "2027-01-01":"신정","2027-02-06":"설날 연휴","2027-02-07":"설날","2027-02-08":"설날 연휴","2027-02-09":"대체공휴일(설날)",
+  "2027-03-01":"삼일절","2027-05-05":"어린이날","2027-05-13":"부처님오신날","2027-06-06":"현충일",
+  "2027-08-15":"광복절","2027-08-16":"대체공휴일(광복절)","2027-09-14":"추석 연휴","2027-09-15":"추석","2027-09-16":"추석 연휴",
+  "2027-10-03":"개천절","2027-10-04":"대체공휴일(개천절)","2027-10-09":"한글날","2027-10-11":"대체공휴일(한글날)",
+  "2027-12-25":"성탄절","2027-12-27":"대체공휴일(성탄절)",
+  // 2028
+  "2028-01-01":"신정","2028-01-25":"설날 연휴","2028-01-26":"설날","2028-01-27":"설날 연휴",
+  "2028-03-01":"삼일절","2028-04-12":"국회의원 선거일","2028-05-02":"부처님오신날","2028-05-05":"어린이날","2028-06-06":"현충일",
+  "2028-08-15":"광복절","2028-10-02":"추석 연휴","2028-10-03":"추석·개천절","2028-10-04":"추석 연휴","2028-10-05":"대체공휴일",
+  "2028-10-09":"한글날","2028-12-25":"성탄절"
+};
+const FIXED = {"01-01":"신정","03-01":"삼일절","05-05":"어린이날","06-06":"현충일","08-15":"광복절","10-03":"개천절","10-09":"한글날","12-25":"성탄절"};
+const COVERED_YEARS = new Set([2025, 2026, 2027, 2028]);
+const DAY = 86400000;
+const WD = ["일","월","화","수","목","금","토"];
+const $ = id => document.getElementById(id);
+
+const fmt = d => d.toISOString().slice(0, 10);              // UTC 기준 날짜 문자열
+const parse = s => s ? new Date(s + "T00:00:00Z") : null;
+const holidayName = d => {
+  const s = fmt(d);
+  if (COVERED_YEARS.has(d.getUTCFullYear())) return HOLIDAYS[s] || null;
+  return FIXED[s.slice(5)] || null;
+};
+const todayUTC = () => { const t = new Date(); return new Date(Date.UTC(t.getFullYear(), t.getMonth(), t.getDate())); };
+const n = x => x.toLocaleString("ko-KR");
+
+function isOff(d, opt) {
+  const w = d.getUTCDay();
+  if (opt.sat && w === 6) return true;
+  if (opt.sun && w === 0) return true;
+  if (opt.hol && holidayName(d)) return true;
+  return false;
+}
+
+function countWork(from, to, opt) {           // from~to 포함
+  let c = 0;
+  for (let t = from.getTime(); t <= to.getTime(); t += DAY) if (!isOff(new Date(t), opt)) c++;
+  return c;
+}
+
+function calc() {
+  const s = parse($("start").value), e = parse($("end").value);
+  const opt = { sat: $("exSat").checked, sun: $("exSun").checked, hol: $("exHol").checked };
+  const name = $("name").value.trim();
+  $("title").textContent = name ? name + " — 계산 결과" : "계산 결과";
+  syncURL();
+  $("err").style.display = "none";
+  if (!s || !e) return;
+  if (e < s) { $("err").style.display = "block"; return; }
+
+  const total = Math.round((e - s) / DAY) + 1;
+  const work = countWork(s, e, opt);
+  const today = todayUTC();
+  const dday = Math.round((e - today) / DAY);
+
+  let elapsed = 0, remainWork = work;
+  if (today >= s) {
+    const upTo = today > e ? e : today;
+    elapsed = Math.round((upTo - s) / DAY) + 1;
+    const nextDay = new Date(today.getTime() + DAY);
+    remainWork = nextDay > e ? 0 : countWork(nextDay, e, opt);
+  }
+  const pct = Math.min(100, Math.max(0, elapsed / total * 100));
+
+  $("dday").textContent = dday > 0 ? "D-" + n(dday) : dday === 0 ? "D-Day" : "준공 +" + n(-dday);
+  $("total").innerHTML = n(total) + "<small>일</small>";
+  $("work").innerHTML = n(work) + "<small>일</small>";
+  $("off").innerHTML = n(total - work) + "<small>일</small>";
+  $("elapsed").innerHTML = today < s ? "착공 전" : n(elapsed) + "<small>일</small>";
+  $("remainWork").innerHTML = n(remainWork) + "<small>일</small>";
+  $("barfill").style.width = pct.toFixed(1) + "%";
+  $("pct").textContent = pct.toFixed(1) + "%";
+
+  // 기간 내 공휴일 목록
+  const rows = [];
+  for (let t = s.getTime(); t <= e.getTime(); t += DAY) {
+    const d = new Date(t), h = holidayName(d);
+    if (h) rows.push(`<tr><td>${fmt(d)} (${WD[d.getUTCDay()]})</td><td>${h}</td></tr>`);
+  }
+  $("holList").innerHTML = rows.join("") || `<tr><td colspan="2">기간 내 공휴일이 없어요.</td></tr>`;
+  $("holCount").textContent = rows.length ? `(${rows.length}일)` : "";
+}
+
+// URL 쿼리로 상태 저장 → 링크 공유 가능
+function syncURL() {
+  const p = new URLSearchParams();
+  if ($("start").value) p.set("s", $("start").value);
+  if ($("end").value) p.set("e", $("end").value);
+  if ($("name").value.trim()) p.set("n", $("name").value.trim());
+  const flags = ["exSat","exSun","exHol"].map(id => $(id).checked ? "1" : "0").join("");
+  if (flags !== "111") p.set("x", flags);
+  const q = p.toString();
+  history.replaceState(null, "", q ? "?" + q : location.pathname);
+}
+function loadURL() {
+  const p = new URLSearchParams(location.search);
+  const t = todayUTC();
+  $("start").value = p.get("s") || fmt(t);
+  $("end").value = p.get("e") || fmt(new Date(Date.UTC(t.getUTCFullYear() + 1, t.getUTCMonth(), t.getUTCDate())));
+  $("name").value = p.get("n") || "";
+  const x = p.get("x");
+  if (x && x.length === 3) ["exSat","exSun","exHol"].forEach((id, i) => $(id).checked = x[i] === "1");
+}
+
+document.querySelectorAll("input").forEach(el => el.addEventListener("input", calc));
+$("share").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(location.href); $("share").textContent = "✅ 복사됨!"; }
+  catch { prompt("아래 링크를 복사하세요", location.href); }
+  setTimeout(() => $("share").textContent = "🔗 결과 링크 복사", 1500);
+});
+$("reset").addEventListener("click", () => { history.replaceState(null, "", location.pathname); loadURL(); calc(); });
+
+loadURL();
+calc();
+</script>
+</body>
+</html>
